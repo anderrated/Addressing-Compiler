@@ -1,4 +1,4 @@
-import storage
+from storage import register, memory, variable
 from addressing import Access, AddressingMode
 from convert import Length, Precision, Value
 
@@ -18,6 +18,26 @@ operationCodes = [
 
 class Instruction:
 	@staticmethod
+	def getAddressingMode(operand):
+		# Determine the addressing mode based on operand format
+		if operand is None:
+			return "000"  # Default: register
+		if operand.startswith("R"):
+			return "000"  # Register addressing
+		elif operand.startswith("*R"):
+			return "001"  # Register indirect addressing (e.g., *R1)
+		elif operand.startswith("["):
+			return "011"  # Indirect memory (e.g., [100])
+		elif operand.startswith("A"):
+			return "100"  # Indexed addressing (array pointer)
+		elif operand.isdigit():
+			return "010"  # Direct/immediate value
+		elif operand.startswith("stack_") or operand in ["push", "pop"]:
+			return "101"  # Stack addressing (placeholder for expansion)
+		else:
+			return "010"  # Default to direct if unrecognized
+
+	@staticmethod
 	def preEncode(instrxns):
 		new_instrxns = []
 		for instr in instrxns:
@@ -34,7 +54,7 @@ class Instruction:
 				op2 = parts[2]
 				# First: SUB X Y
 				new_instrxns.append(f"SUB {op1} {op2}")
-				# Then:a JEQ X
+				# Then: JEQ X
 				new_instrxns.append(f"{op} {op1}")
 			
 			else:
@@ -61,67 +81,50 @@ class Instruction:
 
 		opcode = E_W + Cat  # 5 bits
 
-		# Default: register addressing mode
-		op1_mode = "000"
+		# Compute addressing modes and operand addresses
+		op1_mode = Instruction.getAddressingMode(op1)
 		op1_addr = Instruction.encodeOp(op1) if op1 else "00000000"
 
-		op2_mode = "000"
+		op2_mode = Instruction.getAddressingMode(op2)
 		op2_addr = Instruction.encodeOp(op2) if op2 else "00000000"
 
 		extra_bits = "00000"
 
 		return opcode + op1_mode + op1_addr + op2_mode + op2_addr + extra_bits
 
-	@staticmethod
 	# convert operands into 8-bit binary strings
 	# returns address in binary 
+	# storage comes from storage.py !! important
+	@staticmethod
 	def encodeOp(operand):
 		if operand is None:
 			return "00000000"
-		if operand.startswith("R"):  # Register R1-R7
-			return format(int(operand[1:]), '08b')
-		elif operand.startswith("A"):  # Array A1-A4
-			return format(10 + int(operand[1:]) - 1, '08b')  # e.g., A1 = 10
-		elif operand == "PC":
-			return format(20, '08b')
-		elif operand == "IR":
-			return format(21, '08b')
-		elif operand == "BR":
-			return format(22, '08b')
-		elif operand == "SPR":
-			return format(23, '08b')
-		elif operand == "TSP":
-			return format(24, '08b')
-		elif operand == "BPR":
-			return format(25, '08b')
-		elif operand == "NBP":
-			return format(26, '08b')
-		elif operand == "MPR":
-			return format(27, '08b')
-		elif operand == "NMP":
-			return format(28, '08b')
-		elif operand == "I1":
-			return format(29, '08b')
-		elif operand == "I2":
-			return format(30, '08b')
-		elif operand.isdigit():  # Immediate value
-			return format(int(operand), '08b')
-		else:
-			raise ValueError(f"Unrecognized operand: {operand}")
+		try:
+			address = variable.load(operand)
+			return format(int(address), '08b')
+		except:
+			if operand.isdigit():  # Immediate constant
+				return format(int(operand), '08b')
+			else:
+				raise ValueError(f"Unrecognized operand: {operand}")
 
 	@staticmethod
 	def encodeProgram(program):
-		addr = int(storage.register.load("PC"))
+		addr = int(register.load("PC")) # Which address to put the 32 bit instruction
 		for inst in Instruction.preEncode(program):
 			binary = Instruction.encode(inst)
-			storage.memory.store(addr, binary)
+			memory.store(addr, binary)
+			print(f"{addr}: {binary}")  # Shows what was stored
 			addr += 1
+
 
 # Example program for testing
 program = [
 	"MOV R1 R2",
 	"ADD R1 R3",
-	"PUSH R1"
+	"PUSH R1",
+	"JEQ R1 R2",
+	"DEF FUNC1"
 ]
 
 Instruction.encodeProgram(program)
