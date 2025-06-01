@@ -30,8 +30,9 @@ class Except(Exception):
 
 class Program:
     def __init__(self, program):
-        pre_encoded = compiler.Instruction.preEncode(program)
-        compiler.Instruction.encodeProgram(pre_encoded)
+        # pre_encoded = compiler.Instruction.preEncode(program)
+        # compiler.Instruction.encodeProgram(pre_encoded)
+        compiler.Instruction.encodeProgram(program)
     
     def run(self):
         try:
