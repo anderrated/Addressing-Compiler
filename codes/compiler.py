@@ -132,15 +132,15 @@ class Instruction:
                 print(f"{addr}: {binary} ({instruction_int})")  # Optional: debug output
                 addr += 1
 
-# Example program (for testing)
-program = [
-    "DEF START",
-    "MOV R1 10",
-    "MOV R2 5",
-    "ADD R1 R2",
-    "JEQ R1 R2",
-    "EOP"
-]
+# # Example program (for testing)
+# program = [
+#     "DEF START",
+#     "MOV R1 10",
+#     "MOV R2 5",
+#     "ADD R1 R2",
+#     "JEQ R1 R2",
+#     "EOP"
+# ]
 
-# Encode and store in memory
-Instruction.encodeProgram(program)
+# # Encode and store in memory
+# Instruction.encodeProgram(program)
