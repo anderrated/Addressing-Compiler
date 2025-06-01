@@ -3,7 +3,6 @@ from addressing import Access, AddressingMode
 import storage
 from convert import Precision, Length
 
-# Initialize PC and IR registers before importing compiler
 storage.register.store('PC', 0)
 storage.register.store('IR', 0)
 
@@ -76,17 +75,19 @@ class Program:
             mode = (inscode >> 16) & 0x07
             addr = (inscode >> 19) & 0xFF
 
-        print(f"DEBUG: getOp(inscode={inscode}, op_num={op_num}) mode={mode} addr={addr}")  # Add this line
+        print(f"DEBUG: getOp(inscode={inscode}, op_num={op_num}) mode={mode} addr={addr}")
 
+        if mode == 0 and addr >= 65:
+            addr -= 64  
         if mode == 7:
-            return None  # No operand
+            return None
 
         addressing_modes = {
             0: lambda a: (AddressingMode.register(a), 'register'),
             1: lambda a: (AddressingMode.register_indirect(a), 'memory'),
             2: lambda a: (AddressingMode.direct(a), 'memory'),
             3: lambda a: (AddressingMode.indirect(a), 'memory'),
-            4: lambda a: (AddressingMode.indexed(a, f'I{op_num}'), 'memory'),
+            4: lambda a: (AddressingMode.indexed(a), 'memory'),
             5: lambda a: (AddressingMode.stack('push'), 'memory'),
             6: lambda a: (AddressingMode.stack('pop'), 'memory')
         }
@@ -96,10 +97,10 @@ class Program:
                 value, storage_type = addressing_modes[mode](addr)
                 return {'value': value, 'address': addr, 'storage_type': storage_type}
             else:
-                print(f"Invalid addressing mode: {mode} (inscode={inscode}, op_num={op_num})")  # Debug
                 raise ValueError(f"Invalid addressing mode: {mode}")
         except Exception as e:
             raise self.exception("ADDRESSING_ERROR", str(e))
+
     
     def execute(self, operands, opcode):
         """Perform Execute operations
@@ -126,18 +127,26 @@ class Program:
         return None
     
     def write(self, dest, src, movcode):
+
         try:
             value = src['value'] if isinstance(src, dict) and 'value' in src else src
 
             if dest['storage_type'] == 'register':
-                Access.store('reg', dest['address'], value)      # changed 'register' to 'reg'
+                Access.store('reg', dest['address'], value)
+
             elif dest['storage_type'] == 'memory':
-                Access.store('mem', dest['address'], value)      # changed 'memory' to 'mem'
+                Access.store('mem', dest['address'], value)
+
+            elif dest['storage_type'] == 'stack':
+                sp = AddressingMode.stack('push')  
+                Access.store('mem', sp, value)
+
             else:
-                AddressingMode.stack('push', value)
+                raise self.exception("WRITE_ERROR", f"Unknown storage type: {dest['storage_type']}")
 
         except Exception as e:
             raise self.exception("WRITE_ERROR", str(e))
+
     
     @staticmethod
     def exception(name, value):
@@ -198,8 +207,8 @@ def run_from_file(filename):
         instructions = []
         for line in lines:
             line = line.strip()
-            if line and not line.startswith('#'):  # Skip empty lines and comments
-                instructions.append(line)  # <-- do NOT split, just append the string
+            if line and not line.startswith('#'):  
+                instructions.append(line)  
         
         program = Program(instructions)
         program.run()
@@ -212,7 +221,6 @@ def run_from_file(filename):
         file_exception.dispMSG()
 
 if __name__ == "__main__":
-    # Initialize PC and IR registers before running or encoding
     storage.register.store('PC', 0)
     storage.register.store('IR', 0)
 
