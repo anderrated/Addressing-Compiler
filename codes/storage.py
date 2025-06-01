@@ -1,3 +1,5 @@
+# storage.py
+
 from convert import Precision, Length
 import copy
 
@@ -6,6 +8,7 @@ class Storage:
         self.data = copy.deepcopy(data)
 
     def load(self, address, isCode=False):
+        # Ensure address is an integer for lookup.
         if isinstance(address, str):
             try:
                 address = int(address)
@@ -16,6 +19,7 @@ class Storage:
                     raise ValueError(f"Invalid address format: {address}")
 
         if address not in self.data:
+            # If the address doesn't exist, initialize it to 0 before loading.
             self.store(address, 0)
 
         value = self.data[address]
@@ -28,6 +32,7 @@ class Storage:
         return value
 
     def store(self, address, value):
+        # Ensure address is an integer for lookup.
         if isinstance(address, str):
             try:
                 address = int(address)
@@ -47,9 +52,10 @@ class Storage:
             raise TypeError(f"Unsupported value type for storage at address {address}: {type(value)}")
 
     def setStorage(self, stolen):
+        # This method ensures all slots up to 'stolen' are initialized.
         for i in range(stolen):
             if i not in self.data:
-                self.store(i, 0) 
+                self.store(i, 0) # Initialize with an integer 0
 
     def dispStorage(self):
         for k, v in self.data.items():
@@ -73,13 +79,16 @@ class Storage:
         except Exception as e:
             print(f"Error displaying slot {key}: {e}")
 
+# --- Global instances and Initialization (Outside the Storage class) ---
 memory = Storage()
 register = Storage()
 
+# List of specialized register names
 register_list = ["BR","DR1","DR2","FR","IR","PC","SPR","TSP","CPR","NCP","BPR","NBP","VPR","NVP","MPR","NMP"]
 
-variable = {} 
+variable = {} # The global 'variable' dictionary maps symbolic names to their numeric addresses.
 
+# Define base addresses for specialized registers and memory sections
 br = 8
 mspr = 112
 mcpr = 152
@@ -87,8 +96,10 @@ mbpr = 168
 mvpr = 200
 mmpr = 216
 
+# Initial values for specialized registers
 memory_list = [br,0,0,0,br,br,mspr,mspr,mcpr,mcpr,mbpr,mbpr,mvpr,mvpr,mmpr,mmpr]
 
+# Initialize specialized registers (BR, DR1, ..., NMP)
 for i in range(len(register_list)):
     reg_name = register_list[i]
     reg_address = br + i
@@ -96,7 +107,8 @@ for i in range(len(register_list)):
     variable[reg_name] = reg_address
     register.store(reg_address, reg_initial_value)
 
-varpr = 1 
+# Initialize General Purpose Registers (R1 to R7)
+varpr = 1 # Base address for GPRs
 var_reglen = 7
 for i in range(var_reglen):
     reg_name = f"R{i+1}"
@@ -104,13 +116,15 @@ for i in range(var_reglen):
     variable[reg_name] = reg_address
     register.store(reg_address, 0)
 
+# Initialize Memory Variables (M1 to M7) - assuming these are distinct memory addresses
 for i in range(var_reglen):
     mem_name = f"M{i+1}"
-    mem_address = varpr + i 
+    mem_address = varpr + i # Adjust if memory variables have different address space
     variable[mem_name] = mem_address
     memory.store(mem_address, 0)
 
-apr = 24 
+# Initialize Array Pointers (A1 to A4)
+apr = 24 # Base address for Array Pointers, assumed to be in registers
 array_reglen = 4
 for i in range(array_reglen):
     array_name = f"A{i+1}"
@@ -118,6 +132,7 @@ for i in range(array_reglen):
     variable[array_name] = array_address
     register.store(array_address, 0)
 
+# Initialize Index Registers (I1 to I2)
 index_reglen = 2
 for i in range(index_reglen):
     index_name = f"I{i+1}"
@@ -125,9 +140,11 @@ for i in range(index_reglen):
     variable[index_name] = index_address
     register.store(index_address, 0)
 
+# Set initial storage sizes and ensure all slots are initialized to 0
 reg_len = 32
 register.setStorage(reg_len)
 mem_len = 256
 memory.setStorage(mem_len)
 
+# This list is used by display functions (e.g., in run.py's main block)
 data = [variable, register, memory]

@@ -1,172 +1,175 @@
-from storage import memory, register, variable, register_list
+# addressing.py
+
+from storage import memory, register, variable
 from convert import Precision, Length, Value
 
-register_list = [
-    'PC', 'IR', 'SPR', 'TSP', 'BPR', 'NBP', 'MPR', 'NMP', 'I1', 'I2',
-    'BR', 'DR1', 'DR2', 'FR', 'CPR', 'NCP', 'VPR', 'NVP'
-]
-
 class Access:
+    """
+    Provides methods to access and modify data in memory and registers.
+    """
     @staticmethod
-    def data(address_or_reg_name, is_code=False):
-        print(f"DEBUG Access.data: address_or_reg_name={address_or_reg_name} ({type(address_or_reg_name)})")
+    def data(addr, flow=["var"], is_code=False):
+        """
+        Retrieves data from memory or a register based on the address and flow.
+        addr: The address, register name, or variable name.
+        flow: A list indicating the order of lookup: "var", "reg", "mem".
+              - "var": Check 'variable' dictionary for symbolic names.
+              - "reg": Check registers.
+              - "mem": Check memory.
+        is_code: Boolean, True if loading an instruction.
+        """
+        # Ensure addr is a string if it's a symbolic name, or int if a direct address.
+        # This function aims to return the actual *value* at the effective location.
 
-        if isinstance(address_or_reg_name, int):
-            return memory.load(address_or_reg_name, isCode=is_code)
+        for f_type in flow:
+            if f_type == "var":
+                if isinstance(addr, str) and addr in variable:
+                    resolved_addr = variable[addr]
+                    # If resolved_addr itself is a register address (e.g., PC, R1)
+                    if resolved_addr in register.data and not (0 <= resolved_addr < memory.max_size): # Assuming memory.max_size distinguishes memory from register addresses
+                         return register.load(resolved_addr, isCode=is_code)
+                    # If it's a memory address
+                    elif isinstance(resolved_addr, int):
+                        return memory.load(resolved_addr, isCode=is_code)
+                    else:
+                        raise ValueError(f"Variable '{addr}' resolved to an unhandleable address: {resolved_addr}")
+            
+            if f_type == "reg":
+                # Try to load directly from register if addr is a known register name or its numeric address
+                if isinstance(addr, str) and addr in variable and variable[addr] in register.data:
+                    return register.load(variable[addr], isCode=is_code)
+                elif isinstance(addr, int) and addr in register.data:
+                    return register.load(addr, isCode=is_code)
 
-        elif isinstance(address_or_reg_name, str):
-            if address_or_reg_name in register_list:
-                return register.load(variable[address_or_reg_name], isCode=is_code)
+            if f_type == "mem":
+                # Try to load directly from memory if addr is a direct memory address (int)
+                if isinstance(addr, int) and addr in memory.data:
+                    return memory.load(addr, isCode=is_code)
+                # Or if it's a string representation of a memory address
+                elif isinstance(addr, str):
+                    try:
+                        mem_address = int(addr)
+                        return memory.load(mem_address, isCode=is_code)
+                    except ValueError:
+                        pass # Not a direct numeric address, continue to next flow type or raise error
 
-            elif address_or_reg_name.startswith('R') and Value.isInteger(address_or_reg_name[1:]):
-                if address_or_reg_name in variable:
-                    return register.load(variable[address_or_reg_name], isCode=is_code)
-                else:
-                    raise ValueError(f"Undefined GPR: {address_or_reg_name}")
-
-            elif (address_or_reg_name.startswith('A') and Value.isInteger(address_or_reg_name[1:])) or \
-                 (address_or_reg_name.startswith('I') and Value.isInteger(address_or_reg_name[1:])):
-                if address_or_reg_name in variable:
-                    return register.load(variable[address_or_reg_name], isCode=is_code)
-                else:
-                    raise ValueError(f"Undefined register type: {address_or_reg_name}")
-
-            elif address_or_reg_name in variable:
-                resolved_addr = variable[address_or_reg_name]
-                if isinstance(resolved_addr, (int, str)):
-                    return memory.load(resolved_addr, isCode=is_code)
-                else:
-                    raise ValueError(f"Variable '{address_or_reg_name}' resolved to non-address value: {resolved_addr}")
-
-            elif Value.isNumber(address_or_reg_name):
-                return memory.load(int(address_or_reg_name), isCode=is_code)
-
-            else:
-                raise ValueError(f"Cannot resolve operand for data access: {address_or_reg_name}")
-        else:
-            raise TypeError(f"Invalid type for address_or_reg_name: {type(address_or_reg_name)}")
+        # If after checking all flow types, the address is still not resolved
+        raise ValueError(f"Could not resolve data for address '{addr}' with flow '{flow}'.")
 
     @staticmethod
-    def store(address_or_reg_name, value, is_code=False):
-        print(f"DEBUG Access.store: address_or_reg_name={address_or_reg_name} ({type(address_or_reg_name)}), value={value}")
-
-        if isinstance(address_or_reg_name, int):
-            return memory.store(address_or_reg_name, value)
-
-        elif isinstance(address_or_reg_name, str):
-            if address_or_reg_name in register_list:
-                register.store(variable[address_or_reg_name], value)
-                return
-
-            elif address_or_reg_name.startswith('R') and Value.isInteger(address_or_reg_name[1:]):
-                if address_or_reg_name in variable:
-                    register.store(variable[address_or_reg_name], value)
-                    return
-                else:
-                    raise ValueError(f"Undefined GPR: {address_or_reg_name}")
-
-            elif (address_or_reg_name.startswith('A') and Value.isInteger(address_or_reg_name[1:])) or \
-                 (address_or_reg_name.startswith('I') and Value.isInteger(address_or_reg_name[1:])):
-                if address_or_reg_name in variable:
-                    register.store(variable[address_or_reg_name], value)
-                    return
-                else:
-                    raise ValueError(f"Undefined register type for store: {address_or_reg_name}")
-
-            elif address_or_reg_name in variable:
-                resolved_addr = variable[address_or_reg_name]
-                if isinstance(resolved_addr, (int, str)):
-                    memory.store(resolved_addr, value)
-                    return
-                else:
-                    raise ValueError(f"Variable '{address_or_reg_name}' resolved to non-address value: {resolved_addr} for store.")
-
-            elif Value.isNumber(address_or_reg_name):
-                memory.store(int(address_or_reg_name), value)
-                return
-
+    def store(typ, addr, value):
+        """
+        Stores a value in either memory or a register.
+        typ: 'memory' or 'register'
+        addr: The numeric address or the symbolic register/variable name.
+        value: The value to store.
+        """
+        if typ == 'register':
+            if isinstance(addr, str) and addr in variable:
+                register.store(variable[addr], value)
+            elif isinstance(addr, int):
+                register.store(addr, value)
             else:
-                raise ValueError(f"Cannot resolve operand for data store: {address_or_reg_name}")
+                raise ValueError(f"Invalid register store target: {addr}")
+        elif typ == 'memory':
+            if isinstance(addr, str) and addr in variable:
+                memory.store(variable[addr], value)
+            elif isinstance(addr, int):
+                memory.store(addr, value)
+            else:
+                raise ValueError(f"Invalid memory store target: {addr}")
         else:
-            raise TypeError(f"Invalid type for address_or_reg_name: {type(address_or_reg_name)}")
+            raise ValueError(f"Unsupported storage type: {typ}. Must be 'memory' or 'register'.")
+
 
 class AddressingMode:
-    @staticmethod
-    def immediate(value):
-        return value, 'immediate' # Special type for immediate values
+    """
+    Defines addressing modes as static methods, returning their 3-bit binary codes.
+    These methods can also encapsulate mode-specific logic.
+    """
 
     @staticmethod
-    def relative(current_address, displacement):
-        return current_address + displacement, 'memory'
+    def immediate(var):
+        """
+        Returns the 3-bit code for Immediate addressing.
+        'var' is the immediate value itself (e.g., "#10" or "5").
+        """
+        # This method is primarily for compiler to get the mode code.
+        # Actual value handling is in compiler's encodeOp.
+        return "010" # 3-bit code for immediate
 
     @staticmethod
-    def based(base_register_addr, displacement):
-        base_value = Access.data(base_register_addr, is_register=True)
-        return base_value + displacement, 'memory'
-
-
-    @staticmethod
-    def indexed(index_reg_name, displacement):
-        # index_reg_name should be 'I1' or 'I2'
-        idx_value = Access.data(index_reg_name, is_register=True)
-        effective_address = idx_value + displacement
-        return effective_address, 'memory'
+    def indexed(displace):
+        """
+        Returns the 3-bit code for Indexed addressing.
+        'displace' is typically the index register (A#).
+        """
+        return "100" # 3-bit code for indexed
 
     @staticmethod
-    def register(reg_name):
-        return reg_name, 'register'
+    def register(reg_addr):
+        """
+        Returns the 3-bit code for Register Direct addressing.
+        'reg_addr' is the register name (e.g., "R1").
+        """
+        return "000" # 3-bit code for register direct
 
     @staticmethod
-    def register_indirect(reg_name):
-        addr_in_reg = Access.data(reg_name, is_register=True)
-        return addr_in_reg, 'memory'
+    def register_indirect(reg_addr):
+        """
+        Returns the 3-bit code for Register Indirect addressing.
+        'reg_addr' is the register name (e.g., "*R1").
+        """
+        return "001" # 3-bit code for register indirect
 
     @staticmethod
     def direct(var_addr):
-        return var_addr, 'memory'
+        """
+        Returns the 3-bit code for Direct addressing.
+        'var_addr' is the symbolic variable/label name (e.g., "START", "M1").
+        """
+        return "110" # 3-bit code for direct
 
     @staticmethod
     def indirect(var_addr):
-        addr_in_memory = Access.data(var_addr, is_register=False)
-        return addr_in_memory, 'memory'
+        """
+        Returns the 3-bit code for Indirect addressing.
+        'var_addr' is the address/register holding the actual address (e.g., "[100]", "[R1]").
+        """
+        return "011" # 3-bit code for indirect
 
     @staticmethod
-    def autoinc(reg_name):
-        original_addr = Access.data(reg_name, is_register=True)
-        # Assuming increment by 1 for addresses (or size of data, simplified to 1 for now)
-        new_addr = original_addr + 1
-        Access.store('register', reg_name, new_addr)
-        return original_addr, 'memory'
+    def autoinc(reg_addr):
+        """
+        Returns the 3-bit code for auto-increment addressing.
+        Note: The actual increment logic should be handled by the runtime (run.py)
+              when an operand of this mode is processed.
+        """
+        # Typically represented by a Register Indirect mode with specific execution semantics.
+        # For encoding, it's often a variant of Register Indirect. Let's use 001 for now.
+        return "001" # Using register indirect for encoding, runtime handles auto-inc semantics.
 
     @staticmethod
-    def autodec(reg_name):
-        original_addr = Access.data(reg_name, is_register=True)
-        # Assuming decrement by 1 for addresses
-        new_addr = original_addr - 1
-        Access.store('register', reg_name, new_addr)
-        return new_addr, 'memory'
+    def autodec(reg_addr):
+        """
+        Returns the 3-bit code for auto-decrement addressing.
+        Note: The actual decrement logic should be handled by the runtime (run.py)
+              when an operand of this mode is processed.
+        """
+        # Similar to auto-increment, often a variant of Register Indirect.
+        return "001" # Using register indirect for encoding, runtime handles auto-dec semantics.
 
     @staticmethod
     def stack(stack_option):
-        spr_val = Access.data('SPR', is_register=True)
-        tsp_val = Access.data('TSP', is_register=True)
-
-        if stack_option == 'PUSH':
-            new_tsp = tsp_val + 1
-            Access.store('register', 'TSP', new_tsp) # Update TSP
-            return new_tsp, 'memory' # Return address where value *will be* stored
-
-        elif stack_option == 'POP':
-            if tsp_val < spr_val: # Check for stack underflow (empty stack)
-                raise IndexError("Stack Underflow: Attempted to pop from an empty stack.")
-            popped_address = tsp_val
-            new_tsp = tsp_val - 1
-            Access.store('register', 'TSP', new_tsp) # Update TSP
-            return popped_address, 'memory'
-
-        elif stack_option == 'TOP':
-            if tsp_val < spr_val: # Check for stack underflow (empty stack)
-                raise IndexError("Stack Underflow: Attempted to read from an empty stack (TOP).")
-            return tsp_val, 'memory'
-        else:
-            raise ValueError(f"Invalid stack option: {stack_option}. Must be 'PUSH', 'POP', or 'TOP'.")
+        """
+        Returns the 3-bit code for stack addressing.
+        'stack_option' can be 'PUSH', 'POP', 'TOP'.
+        Note: The actual stack operations (push/pop/top) are handled by the runtime (run.py)
+              or the instruction itself (e.g., PUSH, POP instructions).
+        """
+        # Stack operations often involve indirect addressing through stack pointers.
+        # For encoding, we can represent it as a form of indirect addressing or a special mode.
+        # Given the existing instruction set, PUSH/POP/TOP are separate instructions
+        # that *use* stack-related addressing. If it's used as an operand mode,
+        # it might be treated as a form of indirect addressing.
+        return "011" # Using indirect for encoding, runtime handles stack semantics.
