@@ -380,7 +380,7 @@ if __name__ == "__main__":
     division_by_zero_exception = Except("Attempted division by zero.")
 
     test_program_filename = "test_program.isa" # Change this to your group's shortcut extension
-
+    """"
     sample_program_lines = [
         "DEF START",
         "MOV 10, R1",  # R1 = 10
@@ -395,8 +395,59 @@ if __name__ == "__main__":
         "JMP END",     # Jump to END if no exception (won't be reached after DIV 0)
         "DEF END",     # Label for jump
         "EOP"
+    ] 
+    """
+    """
+    sample_program_lines = [
+        "DEF START",
+        "MOV #100, R1",  # R1 = 100 (immediate)
+        "MOV #50, R2",   # R2 = 50 (immediate)
+        "ADD R1, R2",    # R1 = R1 + R2 = 100 + 50 = 150
+        "PRNT R1",       # Expected: PRNT: 150
+        "MOV R1, R3",    # R3 = R1 = 150 (register to register)
+        "MOV #25, R1",   # R1 = 25
+        "SUB R3, R1",    # R3 = R3 - R1 = 150 - 25 = 125
+        "PRNT R3",       # Expected: PRNT: 125
+        "MOV #5, R4",    # R4 = 5
+        "MUL R3, R4",    # R3 = R3 * R4 = 125 * 5 = 625
+        "PRNT R3",       # Expected: PRNT: 625
+        "MOV #10, R5",   # R5 = 10
+        "DIV R3, R5",    # R3 = R3 / R5 = 625 / 10 = 62 (integer division)
+        "PRNT R3",       # Expected: PRNT: 62
+        "EOP"
     ]
-
+    """
+    """
+    sample_program_lines = [
+        "DEF START",
+        "MOV #1, R1",    # Just some operation to ensure program runs
+        "PRNT R1",       # Expected: PRNT: 1
+        "POP R2",        # Attempt to POP from an empty stack (should cause exception)
+        "PRNT R2",       # This line should not be reached
+        "EOP"
+    ]
+    """
+    
+    sample_program_lines = [
+        "DEF MAIN",
+        "MOV #5, R1",
+        "PRNT R1",       # Expected: PRNT: 5
+        "PUSH R1",       # Push 5 onto stack
+        "CALL SUB_ROUTINE", # Call subroutine
+        "PRNT R1",       # Expected: PRNT: 20 (R1 modified by subroutine)
+        "POP R2",        # Pop value from stack into R2
+        "PRNT R2",       # Expected: PRNT: 5 (Original R1 value)
+        "JMP END_PROGRAM", # Jump to end
+        "DEF SUB_ROUTINE",
+        "MOV #10, R1",   # R1 = 10
+        "MOV #10, R3",
+        "ADD R1, R3",    # R1 = 10 + 10 = 20
+        "PRNT R1",       # Expected: PRNT: 20 (Inside subroutine)
+        "RET",           # Return to caller
+        "DEF END_PROGRAM",
+        "EOP"
+    ]
+    
     try:
         with open(test_program_filename, 'w') as f:
             for line in sample_program_lines:
