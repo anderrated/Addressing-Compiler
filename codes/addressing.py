@@ -1,104 +1,172 @@
-import storage
-from convert import Precision
+from storage import memory, register, variable, register_list
+from convert import Precision, Length, Value
+
+register_list = [
+    'PC', 'IR', 'SPR', 'TSP', 'BPR', 'NBP', 'MPR', 'NMP', 'I1', 'I2',
+    'BR', 'DR1', 'DR2', 'FR', 'CPR', 'NCP', 'VPR', 'NVP'
+]
 
 class Access:
     @staticmethod
-    def data(addr, flow=["var"]):
-        if flow[0] == "var":
-            # Direct variable access
-            return storage.variable.load(addr)
-        elif flow[0] == "reg":
-            # Register access
-            value = storage.register.load(addr)
-            if len(flow) > 1 and flow[1] == "indirect":
-                # Indirect: value in register is address in memory
-                return storage.memory.load(value)
-            return value
-        elif flow[0] == "indexed":
-            # Indexed addressing: addr is (base, index)
-            base, index = addr
-            address = storage.memory.load(base) + storage.register.load(index)
-            return storage.memory.load(address)
+    def data(address_or_reg_name, is_code=False):
+        print(f"DEBUG Access.data: address_or_reg_name={address_or_reg_name} ({type(address_or_reg_name)})")
+
+        if isinstance(address_or_reg_name, int):
+            return memory.load(address_or_reg_name, isCode=is_code)
+
+        elif isinstance(address_or_reg_name, str):
+            if address_or_reg_name in register_list:
+                return register.load(variable[address_or_reg_name], isCode=is_code)
+
+            elif address_or_reg_name.startswith('R') and Value.isInteger(address_or_reg_name[1:]):
+                if address_or_reg_name in variable:
+                    return register.load(variable[address_or_reg_name], isCode=is_code)
+                else:
+                    raise ValueError(f"Undefined GPR: {address_or_reg_name}")
+
+            elif (address_or_reg_name.startswith('A') and Value.isInteger(address_or_reg_name[1:])) or \
+                 (address_or_reg_name.startswith('I') and Value.isInteger(address_or_reg_name[1:])):
+                if address_or_reg_name in variable:
+                    return register.load(variable[address_or_reg_name], isCode=is_code)
+                else:
+                    raise ValueError(f"Undefined register type: {address_or_reg_name}")
+
+            elif address_or_reg_name in variable:
+                resolved_addr = variable[address_or_reg_name]
+                if isinstance(resolved_addr, (int, str)):
+                    return memory.load(resolved_addr, isCode=is_code)
+                else:
+                    raise ValueError(f"Variable '{address_or_reg_name}' resolved to non-address value: {resolved_addr}")
+
+            elif Value.isNumber(address_or_reg_name):
+                return memory.load(int(address_or_reg_name), isCode=is_code)
+
+            else:
+                raise ValueError(f"Cannot resolve operand for data access: {address_or_reg_name}")
         else:
-            raise ValueError(f"Unknown flow type: {flow}")
+            raise TypeError(f"Invalid type for address_or_reg_name: {type(address_or_reg_name)}")
 
     @staticmethod
-    def store(typ, addr, value):
-        if typ == "mem":
-            storage.memory.store(addr, value)
-        elif typ == "reg":
-            storage.register.store(addr, value)
-        elif typ == "var":
-            storage.variable.store(addr, value)
+    def store(address_or_reg_name, value, is_code=False):
+        print(f"DEBUG Access.store: address_or_reg_name={address_or_reg_name} ({type(address_or_reg_name)}), value={value}")
+
+        if isinstance(address_or_reg_name, int):
+            return memory.store(address_or_reg_name, value)
+
+        elif isinstance(address_or_reg_name, str):
+            if address_or_reg_name in register_list:
+                register.store(variable[address_or_reg_name], value)
+                return
+
+            elif address_or_reg_name.startswith('R') and Value.isInteger(address_or_reg_name[1:]):
+                if address_or_reg_name in variable:
+                    register.store(variable[address_or_reg_name], value)
+                    return
+                else:
+                    raise ValueError(f"Undefined GPR: {address_or_reg_name}")
+
+            elif (address_or_reg_name.startswith('A') and Value.isInteger(address_or_reg_name[1:])) or \
+                 (address_or_reg_name.startswith('I') and Value.isInteger(address_or_reg_name[1:])):
+                if address_or_reg_name in variable:
+                    register.store(variable[address_or_reg_name], value)
+                    return
+                else:
+                    raise ValueError(f"Undefined register type for store: {address_or_reg_name}")
+
+            elif address_or_reg_name in variable:
+                resolved_addr = variable[address_or_reg_name]
+                if isinstance(resolved_addr, (int, str)):
+                    memory.store(resolved_addr, value)
+                    return
+                else:
+                    raise ValueError(f"Variable '{address_or_reg_name}' resolved to non-address value: {resolved_addr} for store.")
+
+            elif Value.isNumber(address_or_reg_name):
+                memory.store(int(address_or_reg_name), value)
+                return
+
+            else:
+                raise ValueError(f"Cannot resolve operand for data store: {address_or_reg_name}")
         else:
-            raise ValueError(f"Unknown storage type: {typ}")
+            raise TypeError(f"Invalid type for address_or_reg_name: {type(address_or_reg_name)}")
 
 class AddressingMode:
     @staticmethod
-    def immediate(var):
-        raise NotImplementedError("Immediate mode not implemented.")
+    def immediate(value):
+        return value, 'immediate' # Special type for immediate values
 
     @staticmethod
-    def relative(displace):
-        raise NotImplementedError("Relative mode not implemented.")
+    def relative(current_address, displacement):
+        return current_address + displacement, 'memory'
 
     @staticmethod
-    def based(displace):
-        raise NotImplementedError("Based mode not implemented.")
+    def based(base_register_addr, displacement):
+        base_value = Access.data(base_register_addr, is_register=True)
+        return base_value + displacement, 'memory'
+
 
     @staticmethod
-    def indexed(displace):
-        return Access.data(displace, flow=["indexed"])
+    def indexed(index_reg_name, displacement):
+        # index_reg_name should be 'I1' or 'I2'
+        idx_value = Access.data(index_reg_name, is_register=True)
+        effective_address = idx_value + displacement
+        return effective_address, 'memory'
 
     @staticmethod
-    def register(reg_addr):
-        return Access.data(reg_addr, flow=["reg"])
+    def register(reg_name):
+        return reg_name, 'register'
 
     @staticmethod
-    def register_indirect(reg_addr):
-        return Access.data(reg_addr, flow=["reg", "indirect"])
+    def register_indirect(reg_name):
+        addr_in_reg = Access.data(reg_name, is_register=True)
+        return addr_in_reg, 'memory'
 
     @staticmethod
     def direct(var_addr):
-        return Access.data(var_addr, flow=["var"])
+        return var_addr, 'memory'
 
     @staticmethod
     def indirect(var_addr):
-        # First get the address stored at var_addr, then load from memory
-        pointer = storage.variable.load(var_addr)
-        return storage.memory.load(pointer)
+        addr_in_memory = Access.data(var_addr, is_register=False)
+        return addr_in_memory, 'memory'
 
     @staticmethod
-    def autoinc(reg_addr):
-        value = storage.register.load(reg_addr)
-        storage.register.store(reg_addr, value + 1)
-        return value
+    def autoinc(reg_name):
+        original_addr = Access.data(reg_name, is_register=True)
+        # Assuming increment by 1 for addresses (or size of data, simplified to 1 for now)
+        new_addr = original_addr + 1
+        Access.store('register', reg_name, new_addr)
+        return original_addr, 'memory'
 
     @staticmethod
-    def autodec(reg_addr):
-        value = storage.register.load(reg_addr)
-        storage.register.store(reg_addr, value - 1)
-        return value
+    def autodec(reg_name):
+        original_addr = Access.data(reg_name, is_register=True)
+        # Assuming decrement by 1 for addresses
+        new_addr = original_addr - 1
+        Access.store('register', reg_name, new_addr)
+        return new_addr, 'memory'
 
     @staticmethod
     def stack(stack_option):
-        # Assume stack pointer is in register "SPR" and stack top pointer is "TSP"
-        spr = "SPR"
-        tsp = "TSP"
-        if stack_option == "push":
-            # Increment stack pointer, then store value at new top
-            sp = storage.register.load(spr) + 1
-            storage.register.store(spr, sp)
-            storage.register.store(tsp, sp)
-            return sp
-        elif stack_option == "pop":
-            # Get top, then decrement stack pointer
-            sp = storage.register.load(spr)
-            storage.register.store(spr, sp - 1)
-            storage.register.store(tsp, sp - 1)
-            return sp
-        elif stack_option == "top":
-            # Return current top of stack
-            return storage.register.load(tsp)
+        spr_val = Access.data('SPR', is_register=True)
+        tsp_val = Access.data('TSP', is_register=True)
+
+        if stack_option == 'PUSH':
+            new_tsp = tsp_val + 1
+            Access.store('register', 'TSP', new_tsp) # Update TSP
+            return new_tsp, 'memory' # Return address where value *will be* stored
+
+        elif stack_option == 'POP':
+            if tsp_val < spr_val: # Check for stack underflow (empty stack)
+                raise IndexError("Stack Underflow: Attempted to pop from an empty stack.")
+            popped_address = tsp_val
+            new_tsp = tsp_val - 1
+            Access.store('register', 'TSP', new_tsp) # Update TSP
+            return popped_address, 'memory'
+
+        elif stack_option == 'TOP':
+            if tsp_val < spr_val: # Check for stack underflow (empty stack)
+                raise IndexError("Stack Underflow: Attempted to read from an empty stack (TOP).")
+            return tsp_val, 'memory'
         else:
-            raise ValueError(f"Unknown stack option: {stack_option}")
+            raise ValueError(f"Invalid stack option: {stack_option}. Must be 'PUSH', 'POP', or 'TOP'.")

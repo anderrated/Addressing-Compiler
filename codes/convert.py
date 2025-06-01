@@ -1,10 +1,8 @@
-#complete already
-
 import math
 
 class Length:
 	whole = 8
-	precision = 32	#length of precision
+	precision = 32
 	fraction = precision-whole-1
 	dec_place = 2
 	instrxn = 32
