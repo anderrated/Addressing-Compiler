@@ -62,7 +62,13 @@ class Instruction:
                 op1, op2 = parts[1], parts[2]
                 new_instrxns.append(f"SUB {op1} {op2}")
                 new_instrxns.append(f"{op} {op1}")
-            
+
+            # Handle 3-operand arithmetic: e.g. ADD R3 R1 R2 -> MOV R3 R1; ADD R3 R2
+            elif op in ["ADD", "SUB", "MUL", "DIV", "MOD"] and len(parts) == 4:
+                dest, src1, src2 = parts[1], parts[2], parts[3]
+                new_instrxns.append(f"MOV {dest} {src1}")
+                new_instrxns.append(f"{op} {dest} {src2}")
+
             else:
                 new_instrxns.append(instr)
 
@@ -105,14 +111,18 @@ class Instruction:
     def encodeOp(operand):
         if operand is None:
             return "00000000"
+        operand = operand.strip().replace(',', '')
+        # Handle register direct first!
+        if operand.startswith("R") and operand[1:].isdigit():
+            return format(int(operand[1:]), '08b')
         try:
             addr = variable.load(operand)
             return format(int(addr), '08b')
         except:
             if operand.isdigit(): # Immediate
                 return format(int(operand), '08b')
-            elif operand.startswith("*R"): # Register Indirect
-                return format(int(variable.load(operand[1:])), '08b')
+            elif operand.startswith("*R") and operand[2:].isdigit(): # Register Indirect
+                return format(int(operand[2:]), '08b')
             elif operand.startswith("[") and operand.endswith("]"): # Indirect Memory
                 inner = operand[1:-1]
                 return format(int(inner), '08b')
@@ -127,8 +137,9 @@ class Instruction:
         for inst in compiled:
             binary = Instruction.encode(inst)
             if binary:
-                memory.store(addr, binary)
-                print(f"{addr}: {binary}")  # Optional: debug output
+                instruction_int = int(binary, 2)
+                memory.store(addr, instruction_int)
+                print(f"{addr}: {binary} ({instruction_int})")  # Optional: debug output
                 addr += 1
 
 # Example program (for testing)
